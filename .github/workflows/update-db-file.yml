@@ -2,7 +2,7 @@ name: update db file
 
 on:
   schedule:
-    - cron: "15 9 * * *"
+    - cron: "45 9 * * *"
 
 jobs:
   update-file:
@@ -21,11 +21,12 @@ jobs:
 
       - name: 暂存提交
         run: |
+          sh -c "
           git config --global user.name 'Suleiman'
           git config --global user.email 'xiayang1900@gmail.com'
           export TZ='Asia/Shanghai'
           git add .
-          git commit -m "update" -a
+          git commit -m "update" -a;exit 0"
       - name: 推送
         uses: ad-m/github-push-action@master
         with:
