@@ -1,0 +1,31 @@
+name: update db file
+
+on:
+  schedule:
+    - "0 0 2 * * * ?"
+
+jobs:
+  update-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 下载文件
+        run: |
+          mkdir -p db && \
+          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-Country.mmdb && \
+          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-City.mmdb && \
+          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-ASN.mmdb
+
+      - name: 暂存提交
+        run: |
+          git config --global user.name 'Suleiman'
+          git config --global user.email 'xiayang1900@gmail.com'
+          export TZ='Asia/Shanghai'
+          git add .
+          git commit -m "update" -a
+      - name: 推送
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
