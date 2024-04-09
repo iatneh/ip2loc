@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: build app and image
 
 on:
   push:
@@ -41,5 +41,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          file: docker/Dockerfile
+          file: Dockerfile
           tags: iatneh1900/ip2loc:latest
