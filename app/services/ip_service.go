@@ -2,42 +2,58 @@ package services
 
 import (
 	"github.com/oschwald/geoip2-golang"
+	"github.com/sirupsen/logrus"
 	"ip2loc/app/models"
 	"net"
 )
 
 var (
-	countryDB     *geoip2.Reader               // 国家地址库
-	countryDBFile = "db/GeoLite2-Country.mmdb" // 国家地址库文件
+	countryDBConnection *geoip2.Reader            // 国家地址库
+	countryDBFile       = "GeoLite2-Country.mmdb" // 国家地址库文件
 
-	cityDB     *geoip2.Reader            // 城市地址库
-	cityDBFile = "db/GeoLite2-City.mmdb" // 城市地址库文件
+	cityDBConnection *geoip2.Reader         // 城市地址库
+	cityDBFile       = "GeoLite2-City.mmdb" // 城市地址库文件
 	// 需要获取的信息语言
 	infoLang = []string{"en"}
 )
 
-func init() {
-	codb, err := geoip2.Open(countryDBFile)
+func initConnection(dbPath string) {
+	if countryDBConnection != nil {
+		err := countryDBConnection.Close()
+		if err != nil {
+			logrus.Errorf("close country db connection error: %v", err)
+		}
+	}
+	if cityDBConnection != nil {
+		err := countryDBConnection.Close()
+		if err != nil {
+			logrus.Errorf("close city db connection error: %v", err)
+		}
+	}
+	var err error
+	countryDBConnection, err = geoip2.Open(dbPath + countryDBFile)
 	if err != nil {
 		panic(err.Error())
 	}
-	countryDB = codb
-
-	cidb, err := geoip2.Open(cityDBFile)
+	cityDBConnection, err = geoip2.Open(dbPath + cityDBFile)
 	if err != nil {
 		panic(err.Error())
 	}
-	cityDB = cidb
 }
 
 // GetIPLocationInLocalDB 生成一个短链接
 func (s *Service) GetIPLocationInLocalDB(inIp string) (*models.IpInfo, error) {
+	dbPath, err := s.conf.General.GetString("db-path")
+	if err != nil {
+		panic(err.Error())
+	}
+	initConnection(dbPath)
 	ip := net.ParseIP(inIp)
-	city, err := cityDB.City(ip)
+	city, err := cityDBConnection.City(ip)
 	if err != nil {
 		return nil, err
 	}
-	country, err := countryDB.Country(ip)
+	country, err := countryDBConnection.Country(ip)
 	if err != nil {
 		return nil, err
 	}

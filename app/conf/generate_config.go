@@ -15,7 +15,7 @@ type GeneralConfig struct {
 	m map[string]interface{}
 }
 
-func New() *GeneralConfig {
+func NewGeneralConfig() *GeneralConfig {
 	return &GeneralConfig{
 		m: make(map[string]interface{}),
 	}

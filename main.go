@@ -16,16 +16,16 @@ var (
 )
 
 func init() {
-	config = conf.AppConf
+	config = conf.InitConfig()
 }
 func main() {
 	router := getRouter()
-	_ = router.Run(fmt.Sprintf("%s:%d", conf.AppConf.Http.Address, conf.AppConf.Http.Port))
+	_ = router.Run(fmt.Sprintf("%s:%d", config.Http.Address, config.Http.Port))
 }
 
 func getRouter() *gin.Engine {
 	router := gin.New()
-	dateFormat := time.DateTime
+	dateFormat := config.General.GetStringDefault("date-format", time.DateTime)
 	router.Use(ginrus.Ginrus(logrus.StandardLogger(), dateFormat, false))
 	router.Use(gin.Recovery())
 	router.Use(gzip.Gzip(gzip.DefaultCompression))

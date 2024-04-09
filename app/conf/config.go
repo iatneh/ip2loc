@@ -21,10 +21,10 @@ type LogConfig struct {
 }
 
 var (
-	AppConf *Config
+	appConf *Config
 )
 
-func init() {
+func InitConfig() *Config {
 	v := viper.New()
 	v.SetConfigName("app")
 	v.AddConfigPath(".")
@@ -35,10 +35,11 @@ func init() {
 	if err != nil {
 		panic(fmt.Errorf("Fatal errors config file: %s \n", err))
 	}
-	if err := v.Unmarshal(&AppConf); err != nil {
+	if err := v.Unmarshal(&appConf); err != nil {
 		panic(fmt.Errorf("Fatal errors config file: %s \n", err))
 	}
 	if len(v.GetStringMap("general")) > 0 {
-		AppConf.General.PutAll(v.GetStringMap("general"))
+		appConf.General.PutAll(v.GetStringMap("general"))
 	}
+	return appConf
 }
