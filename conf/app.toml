@@ -1,0 +1,10 @@
+[Http]
+Address = "0.0.0.0"
+Port = 8003
+
+[Logger]
+Output = "stdout,file:///var/log/ip2location/app.%Y%m%d.log"
+LogLevel = "info"
+
+[General]
+date-format = "2006-01-02 15:04:05.999"
