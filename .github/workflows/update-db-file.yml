@@ -1,6 +1,6 @@
 name: update db file
 
-on: 
+on:
   schedule:
     - cron: "0 2 * * *"
 
