@@ -23,12 +23,14 @@ generate:
 --mkdir-dir:
 	mkdir -p ${BUILD_DIR}
 
-## upx 压缩二进制文件
-.PHONY: upx
-upx:
+--upx:
 	upx ${BUILD_DIR}/${OBJ_NAME}
 
 ## build 构建当前系统环境二进制文件
 .PHONY: build
 build: clean generate --mkdir-dir
 	GOOS="linux" GOARCH="amd64" CGO_ENABLED=0 go build -ldflags ${LDFLAGS} -o ${BUILD_DIR}/${OBJ_NAME}
+
+## build-upx 构建当前系统环境二进制文件 并压缩
+.PHONY: build-upx
+build-upx: build --upx
