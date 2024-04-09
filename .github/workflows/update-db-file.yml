@@ -14,9 +14,10 @@ jobs:
       - name: 下载文件
         run: |
           mkdir -p db && \
-          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-Country.mmdb && \
-          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-City.mmdb && \
-          wget https://git.io/GeoLite2-Country.mmdb -o db/GeoLite2-ASN.mmdb
+          rm -f db/*
+          wget https://git.io/GeoLite2-Country.mmdb -P db && \
+          wget https://git.io/GeoLite2-City.mmdb -P db && \
+          wget https://git.io/GeoLite2-ASN.mmdb -P db/
 
       - name: 暂存提交
         run: |
