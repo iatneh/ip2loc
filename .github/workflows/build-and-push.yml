@@ -1,0 +1,26 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: 安装golang环境
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      
+      - name: 安装upx
+        uses: crazy-max/ghaction-upx@v3.0.0
+        with:
+          install-only: true
+
+      - name: 构建
+        run: make build-upx
