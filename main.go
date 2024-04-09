@@ -8,6 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"ip2loc/app/conf"
 	"ip2loc/app/handlers"
+	"net"
+	"net/http"
 	"time"
 )
 
@@ -20,10 +22,23 @@ func init() {
 }
 func main() {
 	router := getRouter()
-	_ = router.Run(fmt.Sprintf("%s:%d", config.Http.Address, config.Http.Port))
+	// Listen on IPv4 address
+	listener, err := net.Listen("tcp4", fmt.Sprintf("%s:%d", config.Http.Address, config.Http.Port))
+	if err != nil {
+		panic(err)
+	}
+	server := &http.Server{
+		Handler: router,
+	}
+	err = server.Serve(listener)
+	if err != nil {
+		panic(err)
+	}
+	//_ = router.Run(fmt.Sprintf("%s:%d", config.Http.Address, config.Http.Port))
 }
 
 func getRouter() *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	dateFormat := config.General.GetStringDefault("date-format", time.DateTime)
 	router.Use(ginrus.Ginrus(logrus.StandardLogger(), dateFormat, false))

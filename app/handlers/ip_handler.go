@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
+	"ip2loc/app/utils"
 	"net/http"
 )
 
@@ -16,5 +17,6 @@ func (h *Handler) Ip2Location(c *gin.Context) {
 }
 
 func (h *Handler) PublicIP(c *gin.Context) {
-	h.Success(c, c.ClientIP())
+	c.ClientIP()
+	h.Success(c, utils.GetClientIP(c.Request))
 }

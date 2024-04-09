@@ -2,7 +2,9 @@ package conf
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"time"
 )
 
 type Config struct {
@@ -41,5 +43,20 @@ func InitConfig() *Config {
 	if len(v.GetStringMap("general")) > 0 {
 		appConf.General.PutAll(v.GetStringMap("general"))
 	}
+
+	logrus.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: appConf.General.GetStringDefault("date-format", time.DateTime),
+		FullTimestamp:   true,
+		ForceColors:     true,
+		DisableQuote:    true,
+	})
+	if appConf.Logger != nil && len(appConf.Logger.LogLevel) == 0 {
+		appConf.Logger.LogLevel = "debug"
+	}
+	ll, err := logrus.ParseLevel(appConf.Logger.LogLevel)
+	if err != nil {
+		ll = logrus.DebugLevel
+	}
+	logrus.SetLevel(ll)
 	return appConf
 }
