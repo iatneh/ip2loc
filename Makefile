@@ -1,5 +1,5 @@
 LDFLAGS="-w -s -X main.GitCommitId=${GIT_COMMIT_ID} -X main.BuildTime=${BUILD_TIME}"
-BUILD_DIR=$(PWD)/build
+BUILD_DIR=build
 OBJ_NAME=ip2loc
 APP_VERSION=v1.0
 
