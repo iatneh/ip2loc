@@ -2,7 +2,7 @@ name: update db file
 
 on:
   schedule:
-    - cron: "15 8 * * *"
+    - cron: "30 8 * * *"
 
 jobs:
   update-file:
@@ -28,4 +28,4 @@ jobs:
       - name: 推送
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.MY_GITHUB_TOKEN }}
