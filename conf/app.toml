@@ -9,5 +9,5 @@ LogLevel = "info"
 [General]
 date-format = "2006-01-02 15:04:05.99999"
 db-path = "db/"
-download-cron = "0 0/5 * * * *"
+download-cron = "0 0/10 * * * *"
 file-city-url = "https://raw.kkgithub.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
