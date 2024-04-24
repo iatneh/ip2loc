@@ -2,17 +2,16 @@ package services
 
 import (
 	"github.com/oschwald/geoip2-golang"
+	"github.com/sirupsen/logrus"
 	"ip2loc/app/conf"
 	"ip2loc/app/models"
 	"net"
 )
 
 var (
-	countryDBConnection *geoip2.Reader            // 国家地址库
-	countryDBFile       = "GeoLite2-Country.mmdb" // 国家地址库文件
-
 	cityDBConnection *geoip2.Reader         // 城市地址库
 	cityDBFile       = "GeoLite2-City.mmdb" // 城市地址库文件
+
 	// 需要获取的信息语言
 	infoLang = []string{"en"}
 )
@@ -23,12 +22,6 @@ func initConnection(config *conf.Config) {
 	if err != nil {
 		panic(err.Error())
 	}
-	if countryDBConnection == nil {
-		countryDBConnection, err = geoip2.Open(dbPath + countryDBFile)
-		if err != nil {
-			panic(err.Error())
-		}
-	}
 	if cityDBConnection == nil {
 		cityDBConnection, err = geoip2.Open(dbPath + cityDBFile)
 		if err != nil {
@@ -37,15 +30,24 @@ func initConnection(config *conf.Config) {
 	}
 }
 
+// RestConnection 初始化DB链接
+func RestConnection(config *conf.Config) {
+	if cityDBConnection != nil {
+		err := cityDBConnection.Close()
+		if err != nil {
+			logrus.Errorf("db connection close error: %s", err)
+			return
+		}
+		cityDBConnection = nil
+		initConnection(config)
+	}
+}
+
 // GetIPLocationInLocalDB 从本地DB文件读取ip信息
 func (s *Service) GetIPLocationInLocalDB(inIp string) (*models.IpInfo, error) {
 	initConnection(s.conf)
 	ip := net.ParseIP(inIp)
 	city, err := cityDBConnection.City(ip)
-	if err != nil {
-		return nil, err
-	}
-	country, err := countryDBConnection.Country(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +70,8 @@ func (s *Service) GetIPLocationInLocalDB(inIp string) (*models.IpInfo, error) {
 		Ip:          inIp,
 		Longitude:   city.Location.Longitude,
 		Latitude:    city.Location.Latitude,
-		CountryName: getNames(country.Country.Names, infoLang)[infoLang[0]],
-		CountryCode: country.Country.IsoCode,
+		CountryName: getNames(city.Country.Names, infoLang)[infoLang[0]],
+		CountryCode: city.Country.IsoCode,
 		RegionName:  getNames(city.City.Names, infoLang)[infoLang[0]],
 		RegionCode:  regionCode,
 		CityName:    getNames(city.City.Names, infoLang)[infoLang[0]],

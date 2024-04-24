@@ -1,6 +1,6 @@
 [Http]
 Address = "0.0.0.0"
-Port = 8080
+Port = 8004
 
 [Logger]
 Output = "stdout,file:///var/log/ip2location/app.%Y%m%d.log"
@@ -9,3 +9,5 @@ LogLevel = "info"
 [General]
 date-format = "2006-01-02 15:04:05.99999"
 db-path = "db/"
+download-cron = "0 0/3 * * * *"
+file-city-url = "https://git.io/GeoLite2-City.mmdb"

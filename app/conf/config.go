@@ -26,6 +26,9 @@ var (
 	appConf *Config
 )
 
+func GetConfig() *Config {
+	return appConf
+}
 func InitConfig() *Config {
 	v := viper.New()
 	v.SetConfigName("app")

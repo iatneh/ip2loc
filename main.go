@@ -5,9 +5,11 @@ import (
 	"github.com/gin-gonic/contrib/ginrus"
 	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 	"ip2loc/app/conf"
 	"ip2loc/app/handlers"
+	"ip2loc/app/utils"
 	"net"
 	"net/http"
 	"time"
@@ -19,6 +21,9 @@ var (
 
 func init() {
 	config = conf.InitConfig()
+
+	// 初始化定时任务
+	initCron()
 }
 func main() {
 	router := getRouter()
@@ -53,4 +58,19 @@ func getRouter() *gin.Engine {
 		hand.PublicIP(c)
 	})
 	return router
+}
+
+func initCron() {
+	logrus.Info("init cron")
+	c := cron.New()
+	downloadCron := config.General.GetStringDefault("download-cron", "0 0 8 0/2 * *")
+	logrus.Infof("init cron %s download file", downloadCron)
+	err := c.AddFunc(downloadCron, func() {
+		utils.DownloadFile()
+	})
+	if err != nil {
+		logrus.Errorf("init cron error: %s", err)
+		return
+	}
+	c.Start()
 }
