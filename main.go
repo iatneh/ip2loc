@@ -23,7 +23,7 @@ func init() {
 	config = conf.InitConfig()
 
 	// 初始化定时任务
-	initCron()
+	initSchedules()
 }
 func main() {
 	router := getRouter()
@@ -60,16 +60,15 @@ func getRouter() *gin.Engine {
 	return router
 }
 
-func initCron() {
-	logrus.Info("init cron")
+func initSchedules() {
 	c := cron.New()
 	downloadCron := config.General.GetStringDefault("download-cron", "0 0 8 0/2 * *")
-	logrus.Infof("init cron %s download file", downloadCron)
+	logrus.Infof("init schedules: download file, cron: %s ", downloadCron)
 	err := c.AddFunc(downloadCron, func() {
-		utils.DownloadFile()
+		utils.UpdateDBFile()
 	})
 	if err != nil {
-		logrus.Errorf("init cron error: %s", err)
+		logrus.Errorf("init schedules error: %s", err)
 		return
 	}
 	c.Start()

@@ -13,54 +13,69 @@ import (
 	"path"
 )
 
-func DownloadFile() {
-	logrus.Info("begin download")
+func UpdateDBFile() {
+	logrus.Info("db file update, begin")
 	cityFileUrl := conf.GetConfig().General.GetStringDefault("file-city-url", "")
 	dbPath := conf.GetConfig().General.GetStringDefault("db-path", "")
 	if len(cityFileUrl) == 0 {
-		logrus.Info("download url is not config")
+		logrus.Info("db file update, download url is not config")
+		return
 	}
 	cityFileName := path.Base(cityFileUrl)
-	dbPathTemp := dbPath + "/temp/" + cityFileName
+	dbPathTemp := dbPath + "temp/" + cityFileName
 	dbPath = dbPath + cityFileName
 
 	client := resty.New()
 	// 文件先下载到临时文件夹
 	resp, err := client.R().SetOutput(dbPathTemp).Get(cityFileUrl)
 	if err != nil || resp.StatusCode() != http.StatusOK {
-		logrus.Errorf("download city file [%s],status code: [%d],error: %s", cityFileUrl, resp.StatusCode(), err)
+		logrus.Errorf("db file update, download city file [%s],status code: [%d],error: %s", cityFileUrl, resp.StatusCode(), err)
 		return
 	}
+	logrus.Info("db file update, download db file success")
 	// 对比两个文件大小一致则返回
 	oldFileMD5Sum, err := getMD5SumString(dbPath)
 	if err != nil {
-		logrus.Errorf("calc old file md5 sum error: %s", err)
+		logrus.Errorf("db file update, calc old file md5 sum error: %s", err)
 		return
 	}
 	newFileMD5Sum, err := getMD5SumString(dbPathTemp)
 	if err != nil {
-		logrus.Errorf("calc new file md5 sum error: %s", err)
+		logrus.Errorf("db file update, calc new file md5 sum error: %s", err)
 		return
 	}
 	if oldFileMD5Sum == newFileMD5Sum {
-		logrus.Info("file not modify")
+		err := os.Remove(dbPathTemp)
+		if err != nil {
+			logrus.Errorf("db file update, delete temp file error: %s", err)
+		}
+		logrus.Info("db file update, not modify,delete temp file")
 		return
 	}
 	err = os.Rename(dbPathTemp, dbPath)
 	if err != nil {
-		logrus.Errorf("move db file error: %s", err)
+		logrus.Errorf("db file update, move db file error: %s", err)
 		return
 	}
 
+	logrus.Info("db file update, reset connection")
 	services.RestConnection(conf.GetConfig())
+
+	logrus.Info("db file update, end")
 }
 func getMD5SumString(filePath string) (string, error) {
-	oldFile, err := os.Open(filePath)
+	f, err := os.Open(filePath)
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			logrus.Errorf("close file error: %s", err)
+		}
+	}(f)
 	if err != nil {
 		return "", err
 	}
 	file1Sum := md5.New()
-	_, err = io.Copy(file1Sum, oldFile)
+	_, err = io.Copy(file1Sum, f)
 	if err != nil {
 		return "", err
 	}
