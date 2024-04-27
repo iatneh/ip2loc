@@ -1,6 +1,6 @@
 [Http]
 Address = "0.0.0.0"
-Port = 8004
+Port = 8080
 
 [Logger]
 Output = "stdout,file:///var/log/ip2location/app.%Y%m%d.log"

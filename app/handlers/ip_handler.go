@@ -17,6 +17,5 @@ func (h *Handler) Ip2Location(c *gin.Context) {
 }
 
 func (h *Handler) PublicIP(c *gin.Context) {
-	c.ClientIP()
 	h.Success(c, utils.GetClientIP(c.Request))
 }
