@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hsia
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: hsia
+  labels:
+    app: ip2loc
+  name: ip2loc
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ip2loc
+  template:
+    metadata:
+      labels:
+        app: ip2loc
+    spec:
+      containers:
+        - name: ip2loc
+          image: iatneh1900/ip2loc
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: hsia
+  name: ip2loc-service
+spec:
+  # type: NodePort
+  selector:
+    app: ip2loc
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: hsia
+  name: ip2loc-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /ip(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ip2loc-service
+                port:
+                  number: 80
