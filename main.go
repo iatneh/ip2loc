@@ -21,7 +21,6 @@ var (
 
 func init() {
 	config = conf.InitConfig()
-
 	// 初始化定时任务
 	initSchedules()
 }
@@ -44,6 +43,7 @@ func main() {
 
 func getRouter() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
+	gin.DisableConsoleColor()
 	router := gin.New()
 	dateFormat := config.General.GetStringDefault("date-format", time.DateTime)
 	router.Use(ginrus.Ginrus(logrus.StandardLogger(), dateFormat, false))
