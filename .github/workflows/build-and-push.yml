@@ -1,0 +1,37 @@
+name: build app and image
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: 安装golang环境
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      
+      - name: 安装upx
+        uses: crazy-max/ghaction-upx@v3.0.0
+        with:
+          install-only: true
+
+      - name: 构建程序
+        run: make build-upx
+
+      - name: 登录Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: 构建镜像并推送到Docker Hub
+        run: |
+          docker build -t iatneh1900/ip2loc:latest . && \
+          docker push iatneh1900/ip2loc:latest
