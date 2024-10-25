@@ -34,7 +34,7 @@ func main() {
 	server := &http.Server{
 		Handler: router,
 	}
-	utils.UpdateDBFile()
+	go utils.UpdateDBFile()
 	err = server.Serve(listener)
 	if err != nil {
 		panic(err)
