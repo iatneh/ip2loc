@@ -26,7 +26,7 @@ func UpdateDBFile() {
 		return
 	}
 	cityFileName := path.Base(cityFileUrl)
-	dbPathTemp := dbPath + "temp/" + cityFileName
+	dbPathTemp := "temp/" + cityFileName
 	dbPath = dbPath + cityFileName
 
 	client := resty.New()

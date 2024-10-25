@@ -33,6 +33,5 @@ jobs:
           
       - name: 构建镜像并推送到Docker Hub
         run: |
-          mkdir -p db
           docker build -t iatneh1900/ip2loc:latest . && \
           docker push iatneh1900/ip2loc:latest
