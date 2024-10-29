@@ -32,8 +32,12 @@ func UpdateDBFile() {
 	client := resty.New()
 	// 文件先下载到临时文件夹
 	resp, err := client.R().SetOutput(dbPathTemp).Get(cityFileUrl)
-	if err != nil || resp.StatusCode() != http.StatusOK {
-		logrus.Errorf("db file update, download city file [%s],status code: [%d],error: %s", cityFileUrl, resp.StatusCode(), err)
+	if err != nil {
+		logrus.Errorf("db file update, download city file [%s],error: %s", cityFileUrl, err.Error())
+		return
+	}
+	if resp.StatusCode() != http.StatusOK {
+		logrus.Errorf("db file update, download city file [%s],status code: [%d]", cityFileUrl, resp.StatusCode())
 		return
 	}
 	logrus.Info("db file update, download db file success")
