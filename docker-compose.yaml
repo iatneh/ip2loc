@@ -1,0 +1,11 @@
+services:
+  ip2loc:
+    image: iatneh1900/ip2loc
+    container_name: ip2loc
+    network_mode: bridge
+    restart: always
+    environment:
+      TZ: "Asia/Shanghai"
+      CITY_FILE_URL: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+    ports:
+      - 8003:8080
