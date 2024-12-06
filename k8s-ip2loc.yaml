@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: hsia
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -23,14 +24,41 @@ spec:
       containers:
         - name: ip2loc
           image: iatneh1900/ip2loc
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          env:
+            - name: CITY_FILE_URL
+              value: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+          resources:
+            limits:
+              cpu: 30m
+            requests:
+              cpu: 10m
+
+
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ip2loc
+  namespace: hsia
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ip2loc
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50
+
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   namespace: hsia
-  name: ip2loc-service
+  name: ip2loc
 spec:
   # type: NodePort
   selector:
@@ -46,7 +74,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   namespace: hsia
-  name: ip2loc-ingress
+  name: ip2loc
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
@@ -58,6 +86,6 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: ip2loc-service
+                name: ip2loc
                 port:
                   number: 80
