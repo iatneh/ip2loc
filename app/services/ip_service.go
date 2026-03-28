@@ -1,23 +1,36 @@
 package services
 
 import (
-	"github.com/oschwald/geoip2-golang"
-	"github.com/sirupsen/logrus"
+	"errors"
 	"ip2loc/app/conf"
 	"ip2loc/app/models"
 	"net"
+	"strings"
+	"sync"
+
+	"github.com/oschwald/geoip2-golang"
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	cityDBConnection *geoip2.Reader         // 城市地址库
 	cityDBFile       = "GeoLite2-City.mmdb" // 城市地址库文件
+	cityDBMu         sync.RWMutex
 
 	// 需要获取的信息语言
 	infoLang = []string{"en"}
 )
 
+var (
+	ErrEmptyIP   = errors.New("ip不能为空")
+	ErrInvalidIP = errors.New("ip格式不正确")
+)
+
 // initConnection 初始化DB链接
 func initConnection(config *conf.Config) {
+	cityDBMu.Lock()
+	defer cityDBMu.Unlock()
+
 	dbPath, err := config.General.GetString("db-path")
 	if err != nil {
 		panic(err.Error())
@@ -32,22 +45,48 @@ func initConnection(config *conf.Config) {
 
 // RestConnection 初始化DB链接
 func RestConnection(config *conf.Config) {
-	if cityDBConnection != nil {
-		err := cityDBConnection.Close()
-		if err != nil {
-			logrus.Errorf("db connection close error: %s", err)
-			return
-		}
-		cityDBConnection = nil
-		initConnection(config)
+	cityDBMu.Lock()
+	defer cityDBMu.Unlock()
+
+	if cityDBConnection == nil {
+		return
+	}
+	err := cityDBConnection.Close()
+	if err != nil {
+		logrus.Errorf("db connection close error: %s", err)
+		return
+	}
+	cityDBConnection = nil
+
+	dbPath, err := config.General.GetString("db-path")
+	if err != nil {
+		panic(err.Error())
+	}
+	cityDBConnection, err = geoip2.Open(dbPath + cityDBFile)
+	if err != nil {
+		panic(err.Error())
 	}
 }
 
 // GetIPLocationInLocalDB 从本地DB文件读取ip信息
 func (s *Service) GetIPLocationInLocalDB(inIp string) (*models.IpInfo, error) {
 	initConnection(s.conf)
+	inIp = strings.TrimSpace(inIp)
+	if inIp == "" {
+		return nil, ErrEmptyIP
+	}
 	ip := net.ParseIP(inIp)
-	city, err := cityDBConnection.City(ip)
+	if ip == nil {
+		return nil, ErrInvalidIP
+	}
+	cityDBMu.RLock()
+	reader := cityDBConnection
+	if reader == nil {
+		cityDBMu.RUnlock()
+		return nil, errors.New("db连接未初始化")
+	}
+	city, err := reader.City(ip)
+	cityDBMu.RUnlock()
 	if err != nil {
 		return nil, err
 	}

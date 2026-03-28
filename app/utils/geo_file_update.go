@@ -3,35 +3,67 @@ package utils
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/go-resty/resty/v2"
-	"github.com/sirupsen/logrus"
 	"io"
 	"ip2loc/app/conf"
 	"ip2loc/app/services"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
+	"time"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/sirupsen/logrus"
 )
 
+var updateDBLock = make(chan struct{}, 1)
+
+func init() {
+	updateDBLock <- struct{}{}
+}
+
 func UpdateDBFile() {
+	select {
+	case <-updateDBLock:
+		defer func() { updateDBLock <- struct{}{} }()
+	default:
+		logrus.Info("db file update skipped: previous update still running")
+		return
+	}
+
 	logrus.Info("db file update,begin")
 	cityFileUrl := os.Getenv("CITY_FILE_URL")
 	if len(cityFileUrl) == 0 {
 		cityFileUrl = conf.GetConfig().General.GetStringDefault("file-city-url", "")
 	}
 	logrus.Infof("db file update url:%s", cityFileUrl)
-	dbPath := conf.GetConfig().General.GetStringDefault("db-path", "")
+	dbDir := conf.GetConfig().General.GetStringDefault("db-path", "")
 	if len(cityFileUrl) == 0 {
 		logrus.Info("db file update, download url is not config")
 		return
 	}
-	cityFileName := path.Base(cityFileUrl)
-	dbPathTemp := "temp/" + cityFileName
-	dbPath = dbPath + cityFileName
+	cityFileName := filepath.Base(cityFileUrl)
+	targetPath := filepath.Join(dbDir, cityFileName)
+	targetDir := filepath.Dir(targetPath)
 
 	client := resty.New()
-	// 文件先下载到临时文件夹
-	resp, err := client.R().SetOutput(dbPathTemp).Get(cityFileUrl)
+	client.SetTimeout(60 * time.Second)
+
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		logrus.Errorf("db file update, create target dir [%s],error: %s", targetDir, err.Error())
+		return
+	}
+
+	tmpFile, err := os.CreateTemp(targetDir, cityFileName+".*.tmp")
+	if err != nil {
+		logrus.Errorf("db file update, create temp file error: %s", err.Error())
+		return
+	}
+	tmpPath := tmpFile.Name()
+	_ = tmpFile.Close()
+	_ = os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	resp, err := client.R().SetOutput(tmpPath).Get(cityFileUrl)
 	if err != nil {
 		logrus.Errorf("db file update, download city file [%s],error: %s", cityFileUrl, err.Error())
 		return
@@ -41,30 +73,38 @@ func UpdateDBFile() {
 		return
 	}
 	logrus.Info("db file update, download db file success")
-	// 对比两个文件大小一致则返回
-	oldFileMD5Sum, err := getMD5SumString(dbPath)
+
+	oldFileMD5Sum, err := getMD5SumString(targetPath)
 	if err != nil {
 		logrus.Errorf("db file update, calc old file md5 sum error: %s", err)
 		return
 	}
-	newFileMD5Sum, err := getMD5SumString(dbPathTemp)
+	newFileMD5Sum, err := getMD5SumString(tmpPath)
 	if err != nil {
 		logrus.Errorf("db file update, calc new file md5 sum error: %s", err)
 		return
 	}
 	if oldFileMD5Sum == newFileMD5Sum {
-		err := os.Remove(dbPathTemp)
-		if err != nil {
-			logrus.Errorf("db file update, delete temp file error: %s", err)
-		}
 		logrus.Info("db file update, not modify,delete temp file")
 		return
 	}
-	err = os.Rename(dbPathTemp, dbPath)
-	if err != nil {
-		logrus.Errorf("db file update, move db file error: %s", err)
+
+	backupPath := targetPath + ".bak"
+	_ = os.Remove(backupPath)
+	if _, err := os.Stat(targetPath); err == nil {
+		if err := os.Rename(targetPath, backupPath); err != nil {
+			logrus.Errorf("db file update, backup db file error: %s", err.Error())
+			return
+		}
+	}
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		if _, statErr := os.Stat(backupPath); statErr == nil {
+			_ = os.Rename(backupPath, targetPath)
+		}
+		logrus.Errorf("db file update, replace db file error: %s", err.Error())
 		return
 	}
+	_ = os.Remove(backupPath)
 
 	logrus.Info("db file update, reset connection")
 	services.RestConnection(conf.GetConfig())

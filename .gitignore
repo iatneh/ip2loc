@@ -2,3 +2,6 @@
 .DS_Store
 .idea
 build
+db/*.mmdb
+db/*.bak
+db/*.tmp
