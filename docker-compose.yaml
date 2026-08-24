@@ -1,11 +1,17 @@
 services:
   ip2loc:
-    image: iatneh1900/ip2loc
+    build: .
+    image: iatneh1900/ip2loc:latest
     container_name: ip2loc
+    restart: unless-stopped
     network_mode: bridge
-    restart: always
     environment:
       TZ: "Asia/Shanghai"
-      CITY_FILE_URL: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+      # Override these to point at a private mirror.
+      IP2LOC_UPDATER_ENABLED: "true"
+      IP2LOC_UPDATER_CITY_URL: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+      # IP2LOC_UPDATER_ASN_URL: "..."
+    volumes:
+      - ./data:/opt/data
     ports:
-      - 8003:8080
+      - "8080:8080"

@@ -1,36 +1,66 @@
-LDFLAGS="-w -s -X main.GitCommitId=${GIT_COMMIT_ID} -X main.BuildTime=${BUILD_TIME}"
-BUILD_DIR=build
-OBJ_NAME=ip2loc
-APP_VERSION=v1.0
+# ip2loc Makefile
+#
+# The `help` target prints every documented target so a fresh checkout has a
+# discoverable surface area. Targets prefixed with `--` are private.
 
-.PHONY: default
-default: help
+GO          ?= go
+GOOS        ?= linux
+GOARCH      ?= amd64
+CGO_ENABLED ?= 0
+LDFLAGS     := -s -w -X main.version=$(VERSION)
+BUILD_DIR    = build
+BIN_NAME    = ip2loc
 
-# help 提取注释作为帮助信息
+VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BUILD_TIME ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+.PHONY: help
 help: ## Show this help.
-	@fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-## clean 删除构建目录
-.PHONY: clean
-clean:
-	rm -rf ${BUILD_DIR}
+.PHONY: all
+all: tidy test build ## tidy + test + build
 
-## generate 生成源码
-.PHONY: generate
-generate:
-	go generate ./...
+.PHONY: tidy
+tidy: ## Sync go.mod/go.sum.
+	$(GO) mod tidy
 
---mkdir-dir:
-	mkdir -p ${BUILD_DIR}
+.PHONY: fmt
+fmt: ## gofmt -s -w the tree.
+	$(GO) fmt ./...
 
---upx:
-	upx ${BUILD_DIR}/${OBJ_NAME}
+.PHONY: vet
+vet: ## go vet the tree.
+	$(GO) vet ./...
 
-## build 构建当前系统环境二进制文件
+.PHONY: test
+test: ## Run unit tests.
+	$(GO) test -race -count=1 ./...
+
+.PHONY: test-cover
+test-cover: ## Run tests with coverage report.
+	$(GO) test -race -count=1 -coverprofile=coverage.out ./...
+	$(GO) tool cover -func=coverage.out
+
 .PHONY: build
-build: clean generate --mkdir-dir
-	GOOS="linux" GOARCH="amd64" CGO_ENABLED=0 go build -ldflags ${LDFLAGS} -o ${BUILD_DIR}/${OBJ_NAME}
+build: ## Build binary to ./build/ip2loc.
+	@mkdir -p $(BUILD_DIR)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
+		$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BIN_NAME) ./cmd/ip2loc
 
-## build-upx 构建当前系统环境二进制文件 并压缩
-.PHONY: build-upx
-build-upx: build --upx
+.PHONY: run
+run: ## Run the server with the default config.
+	$(GO) run ./cmd/ip2loc -config ./configs/app.yaml
+
+.PHONY: clean
+clean: ## Remove build artefacts.
+	rm -rf $(BUILD_DIR) coverage.out
+
+.PHONY: docker
+docker: ## Build the container image.
+	docker build -t iatneh1900/$(BIN_NAME):$(VERSION) .
+
+.PHONY: docker-run
+docker-run: ## Run the container, mapping 8080.
+	docker run --rm -p 8080:8080 -v $(PWD)/data:/opt/data iatneh1900/$(BIN_NAME):$(VERSION)

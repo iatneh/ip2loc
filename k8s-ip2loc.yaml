@@ -27,9 +27,43 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          # Readiness probe: /readyz only returns 200 once the city mmdb is
+          # loaded into memory, so a pod is not sent traffic before it can
+          # actually answer queries.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          # All knobs are env-overrides on configs/app.yaml. Uncomment / set
+          # to enable scheduled updates from a private mirror.
           env:
-            - name: CITY_FILE_URL
-              value: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+            - name: TZ
+              value: "Asia/Shanghai"
+            # - name: IP2LOC_UPDATER_ENABLED
+            #   value: "true"
+            # - name: IP2LOC_UPDATER_CRON
+            #   value: "0 0 */2 * * *"
+            # - name: IP2LOC_UPDATER_CITY_URL
+            #   value: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+            # - name: IP2LOC_UPDATER_ASN_URL
+            #   value: "https://example.com/GeoLite2-ASN.mmdb"
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+      volumes:
+        - name: data
+          emptyDir: {}
+          # For stateful mmdb caching across pod restarts, swap to a PVC:
+          # persistentVolumeClaim:
+          #   claimName: ip2loc-data
           resources:
             limits:
               cpu: 30m

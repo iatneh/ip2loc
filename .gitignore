@@ -1,7 +1,22 @@
-*.iml
+# Build artefacts
+/build/ip2loc
+/build/*.test
+*.test
+coverage.out
+*.cover
+
+# Local mmdb files (large, never commit)
+/data/
+/db/*.mmdb
+
+# Editor / OS
+.idea/
+.vscode/
 .DS_Store
-.idea
-build
-db/*.mmdb
-db/*.bak
-db/*.tmp
+*.swp
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
