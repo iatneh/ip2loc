@@ -11,6 +11,7 @@ import (
 
 func (h *Handler) Ip2Location(c *gin.Context) {
 	rawIP := strings.TrimSpace(c.Query("ip"))
+	lang := strings.TrimSpace(c.Query("lang"))
 	var ip string
 	if rawIP != "" {
 		ip = utils.NormalizeIP(rawIP)
@@ -25,7 +26,7 @@ func (h *Handler) Ip2Location(c *gin.Context) {
 			return
 		}
 	}
-	result, err := h.service.GetIPLocationInLocalDB(ip)
+	result, err := h.service.GetIPLocation(ip, lang)
 	if err == nil {
 		h.SuccessJSON(c, result)
 		return

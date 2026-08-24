@@ -112,10 +112,14 @@ func newMultiWriter(logConfig *LogConfig) ([]io.Writer, error) {
 				rotatelogs.WithLinkName(linkName),
 			)
 			if err != nil {
-				return nil, err
+				logrus.Warnf("failed to init file logger [%s]: %v", logPath, err)
+				continue
 			}
 			writers = append(writers, rl)
 		}
+	}
+	if len(writers) == 0 {
+		writers = append(writers, os.Stdout)
 	}
 	return writers, nil
 }
