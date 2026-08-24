@@ -5,13 +5,29 @@ services:
     container_name: ip2loc
     restart: unless-stopped
     network_mode: bridge
+
     environment:
       TZ: "Asia/Shanghai"
-      # Override these to point at a private mirror.
+      IP2LOC_HTTP_PORT: "8080"
       IP2LOC_UPDATER_ENABLED: "true"
-      IP2LOC_UPDATER_CITY_URL: "https://raw.incept.pw/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
-      # IP2LOC_UPDATER_ASN_URL: "..."
+      IP2LOC_UPDATER_CITY_URL: "https://git.io/GeoLite2-City.mmdb"
+      IP2LOC_UPDATER_ASN_URL:  "https://git.io/GeoLite2-ASN.mmdb"
+
     volumes:
       - ./data:/opt/data
+
     ports:
       - "8080:8080"
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -50,8 +50,12 @@ build: ## Build binary to ./build/ip2loc.
 		$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BIN_NAME) ./cmd/ip2loc
 
 .PHONY: run
-run: ## Run the server with the default config.
-	$(GO) run ./cmd/ip2loc -config ./configs/app.yaml
+run: ## Run the server with all defaults baked in.
+	$(GO) run ./cmd/ip2loc
+
+.PHONY: print-defaults
+print-defaults: build ## Print the baked-in default config and exit.
+	./$(BUILD_DIR)/$(BIN_NAME) -print-defaults
 
 .PHONY: clean
 clean: ## Remove build artefacts.

@@ -42,8 +42,8 @@ spec:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 20
-          # All knobs are env-overrides on configs/app.yaml. Uncomment / set
-          # to enable scheduled updates from a private mirror.
+          # All knobs are env variables — there is no config file. Uncomment
+          # and set to enable scheduled updates from a private mirror.
           env:
             - name: TZ
               value: "Asia/Shanghai"

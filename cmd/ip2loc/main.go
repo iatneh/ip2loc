@@ -1,21 +1,18 @@
 // Command ip2loc serves IP geolocation lookups backed by MaxMind mmdb files.
 //
-// Usage:
-//
-//	ip2loc -config /etc/ip2loc/app.yaml
-//
-// Environment overrides (highest priority):
-//
-//	IP2LOC_HTTP_PORT, IP2LOC_LOG_LEVEL, IP2LOC_GEOIP_DB_DIR, ...
+// All configuration is via environment variables (IP2LOC_*); the service does
+// not read any configuration file. Run with no flags to start with defaults.
 package main
 
 import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -37,8 +34,8 @@ func main() {
 }
 
 func run() error {
-	cfgPath := flag.String("config", os.Getenv("IP2LOC_CONFIG"), "path to YAML config file")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	printDefaults := flag.Bool("print-defaults", false, "print the baked-in defaults and exit")
 	flag.Parse()
 
 	if *showVersion {
@@ -46,9 +43,14 @@ func run() error {
 		return nil
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	cfg, err := config.Load("")
 	if err != nil {
 		return err
+	}
+
+	if *printDefaults {
+		_, _ = os.Stdout.WriteString(formatDefaults(cfg))
+		return nil
 	}
 
 	log, err := logger.New(cfg.Log)
@@ -56,7 +58,7 @@ func run() error {
 		return err
 	}
 	logger.SetDefault(log)
-	log.Info("ip2loc starting", "version", version, "config", *cfgPath)
+	log.Info("ip2loc starting", "version", version)
 
 	// Build dependencies in dependency order.
 	reader, err := geoip.NewReader(cfg.GeoIP, log)
@@ -104,4 +106,33 @@ func run() error {
 	wg.Wait()
 	log.Info("ip2loc stopped")
 	return nil
+}
+
+// formatDefaults dumps every config field as `KEY = value`. It is used by
+// `-print-defaults` so operators can see the baked-in values without reading
+// source.
+func formatDefaults(c *config.Config) string {
+	var b strings.Builder
+	b.WriteString("ip2loc defaults:\n")
+	fmt.Fprintf(&b, "  IP2LOC_HTTP_ADDRESS                  = %q\n", c.HTTP.Address)
+	fmt.Fprintf(&b, "  IP2LOC_HTTP_PORT                     = %d\n", c.HTTP.Port)
+	fmt.Fprintf(&b, "  IP2LOC_HTTP_READ_TIMEOUT             = %s\n", c.HTTP.ReadTimeout)
+	fmt.Fprintf(&b, "  IP2LOC_HTTP_WRITE_TIMEOUT            = %s\n", c.HTTP.WriteTimeout)
+	fmt.Fprintf(&b, "  IP2LOC_HTTP_IDLE_TIMEOUT             = %s\n", c.HTTP.IdleTimeout)
+	fmt.Fprintf(&b, "  IP2LOC_LOG_LEVEL                     = %q\n", c.Log.Level)
+	fmt.Fprintf(&b, "  IP2LOC_LOG_FORMAT                    = %q\n", c.Log.Format)
+	fmt.Fprintf(&b, "  IP2LOC_LOG_OUTPUT                    = %q\n", c.Log.Output)
+	fmt.Fprintf(&b, "  IP2LOC_GEOIP_DB_DIR                  = %q\n", c.GeoIP.DBDir)
+	fmt.Fprintf(&b, "  IP2LOC_GEOIP_CITY_FILENAME           = %q\n", c.GeoIP.CityFilename)
+	fmt.Fprintf(&b, "  IP2LOC_GEOIP_ASN_FILENAME            = %q\n", c.GeoIP.ASNFilename)
+	fmt.Fprintf(&b, "  IP2LOC_GEOIP_DEFAULT_LANG            = %q\n", c.GeoIP.DefaultLang)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_ENABLED               = %t\n", c.Updater.Enabled)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_RUN_ON_START          = %t\n", c.Updater.RunOnStart)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_CRON                  = %q\n", c.Updater.Cron)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_DOWNLOAD_TIMEOUT      = %s\n", c.Updater.DownloadTimeout)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_CITY_URL              = %q\n", c.Updater.CityURL)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_ASN_URL               = %q\n", c.Updater.ASNURL)
+	fmt.Fprintf(&b, "  IP2LOC_UPDATER_HEADERS               = %q\n", strings.Join(c.Updater.Headers, ","))
+	fmt.Fprintf(&b, "  IP2LOC_DEFAULTS_ALLOW_PRIVATE_IP     = %t\n", c.Defaults.AllowPrivateIP)
+	return b.String()
 }

@@ -76,6 +76,12 @@ func New(cfg config.UpdaterConfig, geoCfg config.GeoIPConfig, reader Reloader, l
 
 // Start launches the cron loop. Returns immediately; failures to parse the
 // cron expression are surfaced synchronously.
+//
+// If RunOnStart is true (default), one download+reload cycle is fired off in
+// a goroutine right after the cron is scheduled, so a freshly started
+// container reaches /readyz without waiting up to one cron interval. The
+// goroutine shares the single-flight lock with cron-driven runs, so it cannot
+// overlap with a tick that happens to fire at almost the same instant.
 func (u *Updater) Start() error {
 	if !u.cfg.Enabled {
 		u.log.Info("updater disabled")
@@ -96,7 +102,22 @@ func (u *Updater) Start() error {
 	}
 	u.entryID = id
 	u.cron.Start()
-	u.log.Info("updater started", "cron", u.cfg.Cron, "next", u.cron.Entry(id).Next)
+	u.log.Info("updater started",
+		"cron", u.cfg.Cron,
+		"next", u.cron.Entry(id).Next,
+		"run_on_start", u.cfg.RunOnStart,
+	)
+
+	if u.cfg.RunOnStart {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), u.cfg.DownloadTimeout+30*time.Second)
+			defer cancel()
+			u.log.Info("updater running initial cycle (run-on-start)")
+			if err := u.RunOnce(ctx); err != nil {
+				u.log.Warn("initial update failed", "err", err)
+			}
+		}()
+	}
 	return nil
 }
 

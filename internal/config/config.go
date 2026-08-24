@@ -2,11 +2,13 @@
 //
 // Configuration sources, in increasing order of precedence:
 //  1. Built-in defaults.
-//  2. YAML file (path from -config / IP2LOC_CONFIG, default ./configs/app.yaml).
-//  3. Environment variables (IP2LOC_<SECTION>_<KEY>).
+//  2. Environment variables (IP2LOC_<SECTION>_<KEY>).
 //
-// The struct shape is intentionally exhaustive: every key the program reads has a
-// home here, so we never sprinkle GetStringDefault through business code.
+// The service does **not** read any configuration file. All knobs are set
+// via env vars at process start, or fall back to the defaults baked into this
+// package. The struct shape is intentionally exhaustive: every key the
+// program reads has a home here, so we never sprinkle GetStringDefault
+// through business code.
 package config
 
 import (
@@ -16,8 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // Config is the root configuration object.
@@ -56,6 +56,12 @@ type GeoIPConfig struct {
 // UpdaterConfig drives the periodic download job.
 type UpdaterConfig struct {
 	Enabled         bool          `mapstructure:"enabled"`
+	// RunOnStart triggers a single download+reload cycle immediately after
+	// the process boots (in addition to the cron schedule). Default true so
+	// a freshly started container reaches /readyz without waiting up to one
+	// cron interval. Set to false to keep the legacy "first download only
+	// on the next cron tick" behaviour.
+	RunOnStart      bool          `mapstructure:"run-on-start"`
 	Cron            string        `mapstructure:"cron"`
 	DownloadTimeout time.Duration `mapstructure:"download-timeout"`
 	CityURL         string        `mapstructure:"city-url"`
@@ -95,8 +101,15 @@ func defaults() *Config {
 		},
 		Updater: UpdaterConfig{
 			Enabled:         false,
+			RunOnStart:      true,
 			Cron:            "0 0 */2 * * *",
 			DownloadTimeout: 120 * time.Second,
+			// Default mmdb download URLs. These are short-URL aliases hosted
+			// at git.io and resolve to the P3TERX/GeoLite.mmdb GitHub raw
+			// mirror. Override via IP2LOC_UPDATER_CITY_URL /
+			// IP2LOC_UPDATER_ASN_URL when needed.
+			CityURL:         "https://git.io/GeoLite2-City.mmdb",
+			ASNURL:          "https://git.io/GeoLite2-ASN.mmdb",
 			Headers:         []string{},
 		},
 		Defaults: DefaultsConfig{
@@ -105,49 +118,155 @@ func defaults() *Config {
 	}
 }
 
-// Load resolves configuration from defaults → file → env → flags.
-// configPath may be empty to fall back to the search list.
-func Load(configPath string) (*Config, error) {
-	v := viper.NewWithOptions(viper.KeyDelimiter("."))
-
-	// 1) Defaults.
-	def := defaults()
-	if err := bindDefaults(v, def); err != nil {
-		return nil, fmt.Errorf("bind defaults: %w", err)
-	}
-
-	// 2) File.
-	v.SetConfigType("yaml")
-	if configPath != "" {
-		v.SetConfigFile(configPath)
-	} else {
-		v.SetConfigName("app")
-		v.AddConfigPath("./configs")
-		v.AddConfigPath("./conf")
-		v.AddConfigPath(".")
-		v.AddConfigPath("/etc/ip2loc")
-	}
-	if err := v.ReadInConfig(); err != nil {
-		var nfErr viper.ConfigFileNotFoundError
-		if !errors.As(err, &nfErr) && configPath != "" {
-			return nil, fmt.Errorf("read config %q: %w", configPath, err)
-		}
-	}
-
-	// 3) Env: IP2LOC_HTTP_PORT, IP2LOC_GEOIP_DB_DIR, ...
-	v.SetEnvPrefix("IP2LOC")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	v.AutomaticEnv()
-
+// Load resolves configuration from defaults → env overrides.
+// The path argument is preserved for backwards compatibility but is ignored —
+// the service no longer reads any configuration file.
+func Load(_ string) (*Config, error) {
 	cfg := defaults()
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
+	if err := applyEnv(cfg); err != nil {
+		return nil, err
 	}
-
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// applyEnv walks every tagged Config field, looks up the corresponding
+// IP2LOC_<UPPER_SNAKE> env var, and overlays the value onto cfg if set.
+// Slice fields (e.g. updater.headers) are comma-separated on the env side.
+// Numeric and time.Duration fields are parsed via the standard library.
+func applyEnv(cfg *Config) error {
+	type field struct {
+		env   string
+		path  []string
+		apply func(*Config, string) error
+	}
+	fields := []field{
+		// HTTP
+		{"IP2LOC_HTTP_ADDRESS", nil, func(c *Config, v string) error { c.HTTP.Address = v; return nil }},
+		{"IP2LOC_HTTP_PORT", nil, func(c *Config, v string) error {
+			p, err := parseInt(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_HTTP_PORT: %w", err)
+			}
+			c.HTTP.Port = p
+			return nil
+		}},
+		{"IP2LOC_HTTP_READ_TIMEOUT", nil, func(c *Config, v string) error {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_HTTP_READ_TIMEOUT: %w", err)
+			}
+			c.HTTP.ReadTimeout = d
+			return nil
+		}},
+		{"IP2LOC_HTTP_WRITE_TIMEOUT", nil, func(c *Config, v string) error {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_HTTP_WRITE_TIMEOUT: %w", err)
+			}
+			c.HTTP.WriteTimeout = d
+			return nil
+		}},
+		{"IP2LOC_HTTP_IDLE_TIMEOUT", nil, func(c *Config, v string) error {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_HTTP_IDLE_TIMEOUT: %w", err)
+			}
+			c.HTTP.IdleTimeout = d
+			return nil
+		}},
+		// Log
+		{"IP2LOC_LOG_LEVEL", nil, func(c *Config, v string) error { c.Log.Level = v; return nil }},
+		{"IP2LOC_LOG_FORMAT", nil, func(c *Config, v string) error { c.Log.Format = v; return nil }},
+		{"IP2LOC_LOG_OUTPUT", nil, func(c *Config, v string) error { c.Log.Output = v; return nil }},
+		// GeoIP
+		{"IP2LOC_GEOIP_DB_DIR", nil, func(c *Config, v string) error { c.GeoIP.DBDir = v; return nil }},
+		{"IP2LOC_GEOIP_CITY_FILENAME", nil, func(c *Config, v string) error { c.GeoIP.CityFilename = v; return nil }},
+		{"IP2LOC_GEOIP_ASN_FILENAME", nil, func(c *Config, v string) error { c.GeoIP.ASNFilename = v; return nil }},
+		{"IP2LOC_GEOIP_DEFAULT_LANG", nil, func(c *Config, v string) error { c.GeoIP.DefaultLang = v; return nil }},
+		// Updater
+		{"IP2LOC_UPDATER_ENABLED", nil, func(c *Config, v string) error {
+			b, err := parseBool(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_UPDATER_ENABLED: %w", err)
+			}
+			c.Updater.Enabled = b
+			return nil
+		}},
+		{"IP2LOC_UPDATER_RUN_ON_START", nil, func(c *Config, v string) error {
+			b, err := parseBool(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_UPDATER_RUN_ON_START: %w", err)
+			}
+			c.Updater.RunOnStart = b
+			return nil
+		}},
+		{"IP2LOC_UPDATER_CRON", nil, func(c *Config, v string) error { c.Updater.Cron = v; return nil }},
+		{"IP2LOC_UPDATER_DOWNLOAD_TIMEOUT", nil, func(c *Config, v string) error {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_UPDATER_DOWNLOAD_TIMEOUT: %w", err)
+			}
+			c.Updater.DownloadTimeout = d
+			return nil
+		}},
+		{"IP2LOC_UPDATER_CITY_URL", nil, func(c *Config, v string) error { c.Updater.CityURL = v; return nil }},
+		{"IP2LOC_UPDATER_ASN_URL", nil, func(c *Config, v string) error { c.Updater.ASNURL = v; return nil }},
+		{"IP2LOC_UPDATER_HEADERS", nil, func(c *Config, v string) error {
+			c.Updater.Headers = splitCSV(v)
+			return nil
+		}},
+		// Defaults
+		{"IP2LOC_DEFAULTS_ALLOW_PRIVATE_IP", nil, func(c *Config, v string) error {
+			b, err := parseBool(v)
+			if err != nil {
+				return fmt.Errorf("IP2LOC_DEFAULTS_ALLOW_PRIVATE_IP: %w", err)
+			}
+			c.Defaults.AllowPrivateIP = b
+			return nil
+		}},
+	}
+	for _, f := range fields {
+		v, ok := os.LookupEnv(f.env)
+		if !ok || v == "" {
+			continue
+		}
+		if err := f.apply(cfg, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parseInt(s string) (int, error) {
+	var n int
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+		return 0, fmt.Errorf("invalid int %q: %w", s, err)
+	}
+	return n, nil
+}
+
+func parseBool(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "t", "true", "yes", "on":
+		return true, nil
+	case "0", "f", "false", "no", "off":
+		return false, nil
+	}
+	return false, fmt.Errorf("invalid bool %q", s)
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
 }
 
 // Validate enforces invariants we cannot express in struct tags.
@@ -184,34 +303,9 @@ func (c *Config) ASNPath() string {
 	return filepath.Join(c.GeoIP.DBDir, c.GeoIP.ASNFilename)
 }
 
-// bindDefaults registers each field as a default so viper's precedence works.
-func bindDefaults(v *viper.Viper, c *Config) error {
-	set := func(path string, val interface{}) {
-		v.SetDefault(path, val)
-	}
-	set("http.address", c.HTTP.Address)
-	set("http.port", c.HTTP.Port)
-	set("http.read-timeout", c.HTTP.ReadTimeout)
-	set("http.write-timeout", c.HTTP.WriteTimeout)
-	set("http.idle-timeout", c.HTTP.IdleTimeout)
-	set("log.level", c.Log.Level)
-	set("log.format", c.Log.Format)
-	set("log.output", c.Log.Output)
-	set("geoip.db-dir", c.GeoIP.DBDir)
-	set("geoip.city-filename", c.GeoIP.CityFilename)
-	set("geoip.asn-filename", c.GeoIP.ASNFilename)
-	set("geoip.default-lang", c.GeoIP.DefaultLang)
-	set("updater.enabled", c.Updater.Enabled)
-	set("updater.cron", c.Updater.Cron)
-	set("updater.download-timeout", c.Updater.DownloadTimeout)
-	set("updater.city-url", c.Updater.CityURL)
-	set("updater.asn-url", c.Updater.ASNURL)
-	set("updater.headers", c.Updater.Headers)
-	set("defaults.allow-private-ip", c.Defaults.AllowPrivateIP)
-	return nil
-}
-
 // EnvOrFile picks the env var value if set, otherwise returns the fallback.
+// Kept for any callers that still expect it; the service itself no longer
+// reads files.
 func EnvOrFile(envKey, fallback string) string {
 	if v, ok := os.LookupEnv(envKey); ok && v != "" {
 		return v
