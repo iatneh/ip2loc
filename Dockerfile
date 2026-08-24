@@ -15,6 +15,16 @@ LABEL org.opencontainers.image.source="https://github.com/iatneh/ip2loc"
 
 COPY --from=build /out/ip2loc /opt/ip2loc
 
+# Pre-populated mmdb cache from the CI workflow. The CI downloads the latest
+# GeoLite2-City.mmdb / GeoLite2-ASN.mmdb into ./db-cache/ before invoking
+# `docker build`, so a freshly pulled image is immediately ready to serve
+# lookups — no first-start download required.
+#
+# `db-cache/.gitkeep` (filtered by .dockerignore) keeps the directory present
+# in the build context for local builds; in that case /opt/data ships empty
+# and the in-container updater (if enabled) fills it on first start.
+COPY db-cache/ /opt/data/
+
 WORKDIR /opt
 EXPOSE 8080
 VOLUME ["/opt/data"]

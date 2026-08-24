@@ -1,0 +1,23 @@
+# Build artefacts that are not needed inside the image.
+.git
+.github
+.idea
+.vscode
+.DS_Store
+*.swp
+
+# Local Go build / test output.
+build/
+*.test
+coverage.out
+*.cover
+
+# Local mmdb scratch files used for development (the Docker build pulls
+# whatever ./db-cache/ contains at build time, so in-tree copies would
+# shadow the CI-prefetched ones).
+db/*.mmdb
+data/
+
+# The .gitkeep placeholder exists only so ./db-cache/ is present in the
+# build context for local builds. Don't pollute /opt/data/ with it.
+db-cache/.gitkeep

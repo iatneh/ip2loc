@@ -9,6 +9,11 @@ coverage.out
 /data/
 /db/*.mmdb
 
+# CI-prefetched mmdb cache (downloaded by .github/workflows/ci.yaml into
+# ./db-cache/ before each docker build). The .gitkeep placeholder is kept
+# so the directory exists in the build context for local builds.
+/db-cache/*.mmdb
+
 # Editor / OS
 .idea/
 .vscode/
