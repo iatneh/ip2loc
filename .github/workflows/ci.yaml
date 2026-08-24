@@ -43,6 +43,11 @@ jobs:
   # Build and push the container image to Docker Hub on every push to master.
   # Uses Actions secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN.
   # Tags: <username>/ip2loc:sha-<short-sha>, plus :latest on the master branch.
+  #
+  # Freshness: the prefetch step below downloads the latest mmdb files
+  # into ./db-cache/ on every CI run; the Dockerfile then COPYs them into
+  # /opt/data. Each push therefore ships an image with up-to-date GeoLite2
+  # data — first container start has data ready, no download wait.
   docker:
     name: build & push docker image
     runs-on: ubuntu-latest
@@ -52,6 +57,29 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      # Prefetch the latest mmdb files. The Dockerfile does a plain
+      # `COPY db-cache/ /opt/data/` — no network at build time — so the
+      # freshness guarantee lives entirely here.
+      #
+      # A download failure is non-fatal: we log and continue so a flaky
+      # mirror never blocks the image push. The image then ships with the
+      # baked-in copy from the previous successful run (BuildKit cache),
+      # and the in-container updater will catch up on first start.
+      - name: Prefetch latest mmdb files
+        env:
+          CITY_URL: ${{ vars.CITY_MMDB_URL || 'https://git.io/GeoLite2-City.mmdb' }}
+          ASN_URL:  ${{ vars.ASN_MMDB_URL  || 'https://git.io/GeoLite2-ASN.mmdb' }}
+        run: |
+          set -eux
+          mkdir -p db-cache
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+               --max-time 180 -o db-cache/GeoLite2-City.mmdb "$CITY_URL" \
+            || { echo "WARN: city mmdb download failed, falling back to last cached copy"; exit 0; }
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+               --max-time 180 -o db-cache/GeoLite2-ASN.mmdb  "$ASN_URL" \
+            || { echo "WARN: asn mmdb download failed, falling back to last cached copy"; exit 0; }
+          ls -lh db-cache
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
