@@ -104,9 +104,15 @@ dropping a new `.mmdb` into the db-dir by hand picks it up without a restart.
 ### Running in Docker
 
 The container image (`iatneh1900/ip2loc`) listens on `:8080` and exposes
-`/opt/data` as a volume for the mmdb cache. The mmdb files are **not** shipped
-in the image — you must either mount a populated directory or enable the
-updater (see above).
+`/opt/data` as a volume for the mmdb cache. The CI pipeline downloads the
+latest `GeoLite2-City.mmdb` and `GeoLite2-ASN.mmdb` from the P3TERX mirror
+into `./db-cache/` and the Dockerfile `COPY`s them into `/opt/data`, so a
+freshly pulled image is immediately ready to serve lookups — no
+first-start download required.
+
+You can still mount your own directory over `/opt/data` to override the
+baked-in copies, and you should still enable the in-container updater if
+you want the data to refresh automatically between image updates.
 
 ```bash
 docker run --rm -p 8080:8080 \
@@ -117,3 +123,29 @@ docker run --rm -p 8080:8080 \
 
 `docker compose up` (from `docker-compose.yaml`) maps host port `8080` to the
 container.
+
+#### Pointing the baked-in copy at a private mirror
+
+The CI step reads two optional repo-level Variables (Settings → Secrets and
+variables → Actions → Variables):
+
+| Variable         | Default                              |
+|------------------|--------------------------------------|
+| `CITY_MMDB_URL`  | `https://git.io/GeoLite2-City.mmdb`  |
+| `ASN_MMDB_URL`   | `https://git.io/GeoLite2-ASN.mmdb`   |
+
+Set them to point at your private MaxMind mirror; the next CI run bakes
+those copies into the image.
+
+For local builds, drop your mmdb files into `./db-cache/` before invoking
+`docker build`:
+
+```bash
+cp /path/to/GeoLite2-City.mmdb db-cache/
+cp /path/to/GeoLite2-ASN.mmdb  db-cache/
+docker build -t ip2loc:custom .
+```
+
+If `./db-cache/` only contains the placeholder `.gitkeep`, the image
+ships with an empty `/opt/data` and the in-container updater (when
+enabled) fills it on first start.
