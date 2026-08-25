@@ -9,7 +9,7 @@
 //	GET /readyz   → readiness probe (200 only when the City db is loaded)
 //
 // Conventions
-//   - All JSON responses follow the same envelope: { code, message, data }.
+//   - All JSON responses follow the same envelope: { code, msg, data }.
 //   - The original project used a uniform 200-with-code for errors; we keep
 //     that, and additionally return the proper HTTP status code so well-behaved
 //     clients can branch on it.
@@ -203,7 +203,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 type envelope struct {
 	Code    int         `json:"code"`
-	Message string      `json:"message"`
+	Message string      `json:"msg"`
 	Data    interface{} `json:"data"`
 }
 

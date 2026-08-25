@@ -17,7 +17,7 @@ Lightweight MaxMind mmdb-backed IP geolocation service, written in Go.
 $ curl 'http://localhost:8080/ip2loc?ip=183.11.242.230&lang=zh-CN'
 {
   "code": 0,
-  "message": "success",
+  "msg": "success",
   "data": {
     "ip": "183.11.242.230",
     "countryCode": "CN",
